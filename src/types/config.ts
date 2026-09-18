@@ -1,5 +1,5 @@
 import { MigrationConfig } from 'drizzle-orm/migrator';
-import { envOrThrow, envOrThrowNumber } from './lib/utils/env.js';
+import { envOrThrow, envOrThrowNumber } from '../utils/env.js';
 
 process.loadEnvFile();
 
@@ -20,7 +20,7 @@ type AppConfig = {
 };
 
 const migrationConfig: MigrationConfig = {
-  migrationsFolder: './src/lib/db/migrations',
+  migrationsFolder: './src/db/migrations',
 };
 
 export const config: AppConfig = {
