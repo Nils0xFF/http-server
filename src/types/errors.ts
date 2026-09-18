@@ -13,8 +13,8 @@ export class BadRequestError extends CustomHttpError {
 }
 
 export class UnauthorizedError extends CustomHttpError {
-  constructor() {
-    super('Unauthorized', 401);
+  constructor(message?: string) {
+    super(message ?? 'Unauthorized', 401);
   }
 }
 
