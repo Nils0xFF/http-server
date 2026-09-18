@@ -1,9 +1,17 @@
 import express, { NextFunction, Request, RequestHandler, Response } from 'express';
 import { config } from './config.js';
-import { BadRequestError, CustomHttpError } from './errrors.js';
+import { BadRequestError, CustomHttpError, ForbiddenError, NotFoundError } from './errrors.js';
+import postgres from 'postgres';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { createUser, deleteAllUsers, getUserById } from './lib/db/queires/users.js';
+import { createChirp, getChirpById, getChirps } from './lib/db/queires/chirps.js';
+
+const migrationClient = postgres(config.db.url, { max: 1 });
+await migrate(drizzle(migrationClient), config.db.migrationConfig);
 
 const app = express();
-const PORT = 8080;
+const PORT = config.api.port;
 
 app.use(express.json());
 
@@ -20,7 +28,7 @@ app.use(middlewareLogResponses);
 
 const middlewareMetricsInc = (req: Request, res: Response, next: NextFunction) => {
   if (res.statusCode == 200) {
-    config.fileserverHits++;
+    config.api.fileserverHits++;
   }
   next();
 };
@@ -33,7 +41,7 @@ const handlerMetrics: RequestHandler = (req: Request, res: Response) => {
 <html>
   <body>
     <h1>Welcome, Chirpy Admin</h1>
-    <p>Chirpy has been visited ${config.fileserverHits} times!</p>
+    <p>Chirpy has been visited ${config.api.fileserverHits} times!</p>
   </body>
 </html>
   `;
@@ -44,7 +52,13 @@ const handlerMetrics: RequestHandler = (req: Request, res: Response) => {
 app.get('/admin/metrics', handlerMetrics);
 
 const handlerReset: RequestHandler = (req: Request, res: Response) => {
-  config.fileserverHits = 0;
+  if (config.api.platform !== 'dev') {
+    throw new ForbiddenError('');
+  }
+
+  config.api.fileserverHits = 0;
+  deleteAllUsers();
+
   res.send();
 };
 
@@ -60,20 +74,30 @@ app.get('/api/healthz', handlerReadiness);
 async function chirpHandler(req: Request, res: Response) {
   type ChirpBody = {
     body?: unknown;
+    userId?: unknown;
   };
 
-  const body = req.body as ChirpBody;
-  const content = body.body;
-  if (typeof content !== 'string' || content.length === 0) {
+  const reqBody = req.body as ChirpBody;
+  const { body, userId } = reqBody;
+  if (typeof body !== 'string' || body.length === 0) {
     throw new BadRequestError('Invalid body.');
   }
-  if (content.length > 140) {
+  if (body.length > 140) {
     throw new BadRequestError('Chirp is too long. Max length is 140');
+  }
+  if (typeof userId !== 'string' || body.length == 0) {
+    throw new BadRequestError('Invalid userId.');
+  }
+
+  const user = await getUserById(userId);
+
+  if (!user) {
+    throw new BadRequestError('Invalid userId.');
   }
 
   const badWords = new Set(['kerfuffle', 'sharbert', 'fornax']);
 
-  const cleanChirp = content
+  const cleanChirp = body
     .split(' ')
     .map((word) => {
       if (badWords.has(word.toLowerCase())) {
@@ -83,12 +107,50 @@ async function chirpHandler(req: Request, res: Response) {
     })
     .join(' ');
 
-  res.json({
-    cleanedBody: cleanChirp,
-  });
+  const chirp = await createChirp(body, user.id);
+
+  if (!chirp) {
+    throw new Error('Could not create chirp');
+  }
+
+  res.status(201).json(chirp);
 }
 
-app.post('/api/validate_chirp', chirpHandler);
+app.post('/api/chirps', chirpHandler);
+
+app.get('/api/chirps', async (req, res) => {
+  const chirps = await getChirps();
+  res.json(chirps);
+});
+
+app.get('/api/chirps/:id', async (req, res) => {
+  const id = req.params.id;
+
+  const chirp = await getChirpById(id);
+
+  if (!chirp) {
+    throw new NotFoundError('Chirp not found!');
+  }
+
+  res.json(chirp);
+});
+
+app.post('/api/users', async (req, res) => {
+  type CreateUserBody = {
+    email?: unknown;
+  };
+
+  const body = req.body as CreateUserBody;
+  const email = body.email;
+  if (typeof email !== 'string' || email.length === 0) {
+    throw new BadRequestError('Invalid email.');
+  }
+
+  const user = await createUser({ email });
+  console.log(user);
+
+  res.status(201).json(user);
+});
 
 function errorMiddleware(err: Error, req: Request, res: Response, next: NextFunction) {
   if (err instanceof CustomHttpError) {

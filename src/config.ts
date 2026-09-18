@@ -1,13 +1,36 @@
-import { envOrThrow } from './lib/utils/env.js';
+import { MigrationConfig } from 'drizzle-orm/migrator';
+import { envOrThrow, envOrThrowNumber } from './lib/utils/env.js';
 
 process.loadEnvFile();
 
-type APIConfig = {
-  fileserverHits: number;
-  dbURL: string;
+type DBConfig = {
+  migrationConfig: MigrationConfig;
+  url: string;
 };
 
-export const config: APIConfig = {
-  fileserverHits: 0,
-  dbURL: envOrThrow('DB_URL'),
+type APIConfig = {
+  fileserverHits: number;
+  port: number;
+  platform: 'dev' | string;
+};
+
+type AppConfig = {
+  db: DBConfig;
+  api: APIConfig;
+};
+
+const migrationConfig: MigrationConfig = {
+  migrationsFolder: './src/lib/db/migrations',
+};
+
+export const config: AppConfig = {
+  api: {
+    fileserverHits: 0,
+    port: envOrThrowNumber('PORT'),
+    platform: envOrThrow('PLATFORM'),
+  },
+  db: {
+    url: envOrThrow('DB_URL'),
+    migrationConfig,
+  },
 };
