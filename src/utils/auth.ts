@@ -2,6 +2,7 @@ import * as argon2 from 'argon2';
 import jwt from 'jsonwebtoken';
 import type { JwtPayload } from 'jsonwebtoken';
 import { UnauthorizedError } from '../types/errors.js';
+import { Request } from 'express';
 
 type payload = Pick<JwtPayload, 'iss' | 'sub' | 'iat' | 'exp'>;
 
@@ -37,4 +38,13 @@ export function validateJWT(tokenString: string, secret: string) {
   } catch (error) {
     throw new UnauthorizedError('Invalid Token');
   }
+}
+
+export function getBearerToken(req: Request): string {
+  const token = req.headers.authorization?.replace('Bearer', '').trim();
+  if (!token || token.length == 0) {
+    throw new UnauthorizedError('No Token provided');
+  }
+
+  return token;
 }

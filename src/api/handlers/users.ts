@@ -1,8 +1,9 @@
 import { Request, Response, RequestHandler } from 'express';
 import { BadRequestError, UnauthorizedError } from '../../types/errors.js';
 import { createUser, getUserByEmail } from '../../db/queires/index.js';
-import { checkPasswordHash, hashPassword } from '../../utils/auth.js';
+import { checkPasswordHash, hashPassword, makeJWT } from '../../utils/auth.js';
 import { UserResponse } from '../../db/schemas/index.js';
+import { config } from '../../types/config.js';
 
 export const createUserHandler: RequestHandler = async (req: Request, res: Response<UserResponse>) => {
   type CreateUserBody = {
@@ -32,20 +33,26 @@ export const createUserHandler: RequestHandler = async (req: Request, res: Respo
   res.status(201).json(userResponse);
 };
 
-export const loginHandler: RequestHandler = async (req: Request, res: Response<UserResponse>) => {
+export const loginHandler: RequestHandler = async (req: Request, res: Response<UserResponse & { token: string }>) => {
   type LoginBody = {
     email?: unknown;
     password?: unknown;
+    expiresInSeconds?: unknown;
   };
 
   const body = req.body as LoginBody;
-  const { email, password } = body;
+  const { email, password, expiresInSeconds } = body;
   if (typeof email !== 'string' || email.length === 0) {
     throw new BadRequestError('Invalid email.');
   }
   if (typeof password !== 'string' || password.length === 0) {
     throw new BadRequestError('Invalid password.');
   }
+  if (expiresInSeconds !== undefined && typeof expiresInSeconds !== 'number') {
+    throw new BadRequestError('Invalid expiresInSeconds.');
+  }
+
+  const expirySeconds = expiresInSeconds ? Math.min(60 * 60, expiresInSeconds) : 60 * 60;
 
   const user = await getUserByEmail(email);
 
@@ -59,7 +66,9 @@ export const loginHandler: RequestHandler = async (req: Request, res: Response<U
     throw new UnauthorizedError();
   }
 
+  const token = makeJWT(user.id, expirySeconds, config.api.secret);
+
   const { hashedPassword, ...userResponse } = user;
 
-  res.status(200).json(userResponse);
+  res.status(200).json({ ...userResponse, token });
 };
