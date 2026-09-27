@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { checkPasswordHash, hashPassword, makeJWT, validateJWT } from './auth.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { UnauthorizedError } from '../types/errors.js';
+import { checkPasswordHash, hashPassword, makeJWT, validateJWT } from './auth.js';
 
 describe('Password Hashing', () => {
   const password1 = 'correctPassword123!';

@@ -5,7 +5,14 @@ import postgres from 'postgres';
 import { handlerMetrics, handlerReset } from './api/handlers/admin.js';
 import { createChirpHandler, deleteChirpHandler, getChirpHandler, getChirpsHandler } from './api/handlers/chirps.js';
 import { handlerReadiness } from './api/handlers/health.js';
-import { createUserHandler, loginHandler, refreshHandler, revokeHandler, updateOwnUserHandler } from './api/handlers/users.js';
+import {
+  createUserHandler,
+  loginHandler,
+  refreshHandler,
+  revokeHandler,
+  updateOwnUserHandler,
+  upgradeUserHandler,
+} from './api/handlers/users.js';
 import { errorMiddleware, middlewareLogResponses } from './api/middlewares/index.js';
 import { middlewareMetricsInc } from './api/middlewares/metrics.js';
 import { config } from './types/config.js';
@@ -39,6 +46,8 @@ app.post('/api/login', loginHandler);
 
 app.post('/api/refresh', refreshHandler);
 app.post('/api/revoke', revokeHandler);
+
+app.post('/api/polka/webhooks', upgradeUserHandler);
 
 app.use(errorMiddleware);
 

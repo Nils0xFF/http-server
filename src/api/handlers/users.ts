@@ -1,10 +1,10 @@
 import { Request, RequestHandler, Response } from 'express';
-import { createUser, getUserByEmail, updateUser } from '../../db/queires/index.js';
+import { createUser, getUserByEmail, updateUser, upgradeUser } from '../../db/queires/index.js';
 import { createRefreshToken, getTokenDetails, revokeToken } from '../../db/queires/refresh-tokens.js';
 import { UserResponse } from '../../db/schemas/index.js';
 import { config } from '../../types/config.js';
-import { BadRequestError, UnauthorizedError } from '../../types/errors.js';
-import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT } from '../../utils/auth.js';
+import { BadRequestError, NotFoundError, UnauthorizedError } from '../../types/errors.js';
+import { checkPasswordHash, getAPIKey, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT } from '../../utils/auth.js';
 
 export const createUserHandler: RequestHandler = async (req: Request, res: Response<UserResponse>) => {
   type CreateUserBody = {
@@ -134,6 +134,45 @@ export const revokeHandler: RequestHandler = async (req, res) => {
 
   if (!result) {
     throw new UnauthorizedError('Invalid refresh token!');
+  }
+
+  res.status(204).send();
+};
+
+export const upgradeUserHandler: RequestHandler = async (req, res) => {
+  type WebhookBody = {
+    event: unknown;
+    data: {
+      userId: unknown;
+    };
+  };
+
+  const apiKey = getAPIKey(req);
+
+  if (apiKey !== config.api.polkaAPIKey) {
+    throw new UnauthorizedError();
+  }
+
+  const body = req.body as WebhookBody;
+  const { event, data } = body;
+  const { userId } = data;
+
+  if (typeof event !== 'string' || event.length === 0) {
+    throw new BadRequestError('Missing event.');
+  }
+  if (typeof userId !== 'string' || userId.length === 0) {
+    throw new BadRequestError('Missing userId.');
+  }
+
+  if (event !== 'user.upgraded') {
+    res.status(204).send();
+    return;
+  }
+
+  const user = upgradeUser(userId);
+
+  if (!user) {
+    throw new NotFoundError('User not found!');
   }
 
   res.status(204).send();

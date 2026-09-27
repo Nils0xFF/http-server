@@ -53,3 +53,12 @@ export function getBearerToken(req: Request): string {
 export function makeRefreshToken(): string {
   return randomBytes(32).toString('hex');
 }
+
+export function getAPIKey(req: Request): string {
+  const token = req.headers.authorization?.replace('ApiKey', '').trim();
+  if (!token || token.length == 0) {
+    throw new UnauthorizedError('No ApiKey provided');
+  }
+
+  return token;
+}
