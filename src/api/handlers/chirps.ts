@@ -45,7 +45,23 @@ export async function createChirpHandler(req: Request, res: Response) {
 }
 
 export const getChirpsHandler: RequestHandler = async (req, res) => {
-  const chirps = await getChirps();
+  let authorId = undefined;
+  const authorIdQuery = req.query.authorId;
+  if (typeof authorIdQuery === 'string') {
+    authorId = authorIdQuery;
+  }
+
+  let sort = 'asc';
+  const sortQuery = req.query.sort;
+  if (typeof sortQuery === 'string') {
+    sort = sortQuery;
+  }
+
+  if (sort !== 'asc' && sort !== 'desc') {
+    throw new BadRequestError('Invalid sort value');
+  }
+
+  const chirps = await getChirps(sort, authorId);
   res.json(chirps);
 };
 
