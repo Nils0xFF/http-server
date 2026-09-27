@@ -1,14 +1,14 @@
-import express from 'express';
-import { config } from './types/config.js';
-import postgres from 'postgres';
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { errorMiddleware, middlewareLogResponses } from './api/middlewares/index.js';
-import { createChirpHandler, getChirpHandler, getChirpsHandler } from './api/handlers/chirps.js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import express from 'express';
+import postgres from 'postgres';
 import { handlerMetrics, handlerReset } from './api/handlers/admin.js';
+import { createChirpHandler, getChirpHandler, getChirpsHandler } from './api/handlers/chirps.js';
 import { handlerReadiness } from './api/handlers/health.js';
+import { createUserHandler, loginHandler, refreshHandler, revokeHandler } from './api/handlers/users.js';
+import { errorMiddleware, middlewareLogResponses } from './api/middlewares/index.js';
 import { middlewareMetricsInc } from './api/middlewares/metrics.js';
-import { createUserHandler, loginHandler } from './api/handlers/users.js';
+import { config } from './types/config.js';
 
 const migrationClient = postgres(config.db.url, { max: 1 });
 await migrate(drizzle(migrationClient), config.db.migrationConfig);
@@ -34,6 +34,9 @@ app.get('/api/chirps/:id', getChirpHandler);
 
 app.post('/api/users', createUserHandler);
 app.post('/api/login', loginHandler);
+
+app.post('/api/refresh', refreshHandler);
+app.post('/api/revoke', revokeHandler);
 
 app.use(errorMiddleware);
 

@@ -1,9 +1,10 @@
-import { Request, Response, RequestHandler } from 'express';
-import { BadRequestError, UnauthorizedError } from '../../types/errors.js';
+import { Request, RequestHandler, Response } from 'express';
 import { createUser, getUserByEmail } from '../../db/queires/index.js';
-import { checkPasswordHash, hashPassword, makeJWT } from '../../utils/auth.js';
+import { createRefreshToken, getTokenDetails, revokeToken } from '../../db/queires/refresh-tokens.js';
 import { UserResponse } from '../../db/schemas/index.js';
 import { config } from '../../types/config.js';
+import { BadRequestError, UnauthorizedError } from '../../types/errors.js';
+import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken } from '../../utils/auth.js';
 
 export const createUserHandler: RequestHandler = async (req: Request, res: Response<UserResponse>) => {
   type CreateUserBody = {
@@ -33,26 +34,20 @@ export const createUserHandler: RequestHandler = async (req: Request, res: Respo
   res.status(201).json(userResponse);
 };
 
-export const loginHandler: RequestHandler = async (req: Request, res: Response<UserResponse & { token: string }>) => {
+export const loginHandler: RequestHandler = async (req: Request, res: Response<UserResponse & { token: string; refreshToken: string }>) => {
   type LoginBody = {
     email?: unknown;
     password?: unknown;
-    expiresInSeconds?: unknown;
   };
 
   const body = req.body as LoginBody;
-  const { email, password, expiresInSeconds } = body;
+  const { email, password } = body;
   if (typeof email !== 'string' || email.length === 0) {
     throw new BadRequestError('Invalid email.');
   }
   if (typeof password !== 'string' || password.length === 0) {
     throw new BadRequestError('Invalid password.');
   }
-  if (expiresInSeconds !== undefined && typeof expiresInSeconds !== 'number') {
-    throw new BadRequestError('Invalid expiresInSeconds.');
-  }
-
-  const expirySeconds = expiresInSeconds ? Math.min(60 * 60, expiresInSeconds) : 60 * 60;
 
   const user = await getUserByEmail(email);
 
@@ -66,9 +61,48 @@ export const loginHandler: RequestHandler = async (req: Request, res: Response<U
     throw new UnauthorizedError();
   }
 
-  const token = makeJWT(user.id, expirySeconds, config.api.secret);
+  const refreshToken = makeRefreshToken();
+
+  const createdToken = createRefreshToken({
+    token: refreshToken,
+    userId: user.id,
+    expiresAt: new Date(Date.now() + 60 * 24 * 3600 * 1000),
+  });
+
+  if (!createdToken) {
+    throw new Error('Could not create Refresh Token');
+  }
+
+  const token = makeJWT(user.id, 3600, config.api.secret);
 
   const { hashedPassword, ...userResponse } = user;
 
-  res.status(200).json({ ...userResponse, token });
+  res.status(200).json({ ...userResponse, token, refreshToken });
+};
+
+export const refreshHandler: RequestHandler = async (req, res) => {
+  const token = getBearerToken(req);
+
+  const details = await getTokenDetails(token);
+  const now = new Date();
+
+  if (details === null || details.users === null || details.refresh_tokens.revokedAt !== null || now > details.refresh_tokens.expiresAt) {
+    throw new UnauthorizedError('Invalid refresh token!');
+  }
+
+  const updatedJWT = makeJWT(details.users.id, 3600, config.api.secret);
+
+  res.status(200).json({ token: updatedJWT });
+};
+
+export const revokeHandler: RequestHandler = async (req, res) => {
+  const token = getBearerToken(req);
+
+  const result = await revokeToken(token);
+
+  if (!result) {
+    throw new UnauthorizedError('Invalid refresh token!');
+  }
+
+  res.status(204).send();
 };
