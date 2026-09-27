@@ -1,8 +1,8 @@
-import { createChirp, getChirpById, getChirps } from '../../db/queires/index.js';
-import { BadRequestError, NotFoundError } from '../../types/errors.js';
 import { Request, RequestHandler, Response } from 'express';
-import { getBearerToken, validateJWT } from '../../utils/auth.js';
+import { createChirp, deleteChirp, getChirpById, getChirps } from '../../db/queires/index.js';
 import { config } from '../../types/config.js';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../../types/errors.js';
+import { getBearerToken, validateJWT } from '../../utils/auth.js';
 
 export async function createChirpHandler(req: Request, res: Response) {
   type ChirpBody = {
@@ -59,4 +59,25 @@ export const getChirpHandler = async (req: Request<{ id: string }>, res: Respons
   }
 
   res.json(chirp);
+};
+
+export const deleteChirpHandler = async (req: Request<{ id: string }>, res: Response) => {
+  const token = getBearerToken(req);
+  const userId = validateJWT(token, config.api.secret);
+
+  const id = req.params.id;
+
+  const chirp = await getChirpById(id);
+
+  if (!chirp) {
+    throw new NotFoundError('Chirp not found!');
+  }
+
+  if (chirp.userId !== userId) {
+    throw new ForbiddenError();
+  }
+
+  await deleteChirp(chirp.id);
+
+  res.status(204).send();
 };

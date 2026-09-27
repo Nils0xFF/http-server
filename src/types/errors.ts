@@ -19,8 +19,8 @@ export class UnauthorizedError extends CustomHttpError {
 }
 
 export class ForbiddenError extends CustomHttpError {
-  constructor(message: string) {
-    super(message, 403);
+  constructor(message?: string) {
+    super(message ?? 'Forbidden', 403);
   }
 }
 

@@ -1,10 +1,10 @@
 import { Request, RequestHandler, Response } from 'express';
-import { createUser, getUserByEmail } from '../../db/queires/index.js';
+import { createUser, getUserByEmail, updateUser } from '../../db/queires/index.js';
 import { createRefreshToken, getTokenDetails, revokeToken } from '../../db/queires/refresh-tokens.js';
 import { UserResponse } from '../../db/schemas/index.js';
 import { config } from '../../types/config.js';
 import { BadRequestError, UnauthorizedError } from '../../types/errors.js';
-import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken } from '../../utils/auth.js';
+import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT } from '../../utils/auth.js';
 
 export const createUserHandler: RequestHandler = async (req: Request, res: Response<UserResponse>) => {
   type CreateUserBody = {
@@ -32,6 +32,38 @@ export const createUserHandler: RequestHandler = async (req: Request, res: Respo
   const { hashedPassword, ...userResponse } = user;
 
   res.status(201).json(userResponse);
+};
+
+export const updateOwnUserHandler: RequestHandler = async (req: Request, res: Response<UserResponse>) => {
+  type CreateUserBody = {
+    email?: unknown;
+    password?: unknown;
+  };
+
+  const token = getBearerToken(req);
+
+  const userId = validateJWT(token, config.api.secret);
+
+  const body = req.body as CreateUserBody;
+  const { email, password } = body;
+  if (typeof email !== 'string' || email.length === 0) {
+    throw new BadRequestError('Invalid email.');
+  }
+  if (typeof password !== 'string' || password.length === 0) {
+    throw new BadRequestError('Invalid password.');
+  }
+
+  const hash = await hashPassword(password);
+
+  const user = await updateUser(userId, { email, hashedPassword: hash });
+
+  if (!user) {
+    throw new BadRequestError('Duplicate email!');
+  }
+
+  const { hashedPassword, ...userResponse } = user;
+
+  res.status(200).json(userResponse);
 };
 
 export const loginHandler: RequestHandler = async (req: Request, res: Response<UserResponse & { token: string; refreshToken: string }>) => {
